@@ -10,60 +10,86 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="shell">
-      <div class="blob blob-a" aria-hidden="true"></div>
-      <div class="blob blob-b" aria-hidden="true"></div>
-      <div class="blob blob-c" aria-hidden="true"></div>
-
-      <header class="topbar">
-        <div class="brand">
-          <span class="mascot" aria-hidden="true">
-            <span class="mascot-face"></span>
-          </span>
-          <div>
-            <h1>LIVAI</h1>
-            <p>Bạn đồng hành local · <span id="model-label">llama3.2</span></p>
+    <div class="app-layout">
+      <div class="sidebar-overlay" id="overlay"></div>
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <div class="sidebar-brand">
+            <span class="mascot mini"><span class="mascot-face"></span></span>
+            <strong>LIVAI</strong>
+          </div>
+          <button id="create-chat-btn">+ Cuộc trò chuyện mới</button>
+          <div class="search-wrap">
+            <input id="search-chats" placeholder="Tìm kiếm..." />
           </div>
         </div>
-        <button type="button" class="ghost" id="new-chat" hidden>
-          Bắt đầu lại
-        </button>
-      </header>
+        <div id="chat-list"></div>
+        <div class="sidebar-foot">Bạn đồng hành local · llama3.2</div>
+      </aside>
 
-      <main class="stage">
-        <section class="welcome" id="welcome">
-          <div class="welcome-mascot" aria-hidden="true">
-            <span class="mascot big">
-              <span class="mascot-face"></span>
-            </span>
+      <div class="shell">
+        <div class="blob blob-a" aria-hidden="true"></div>
+        <div class="blob blob-b" aria-hidden="true"></div>
+        <div class="blob blob-c" aria-hidden="true"></div>
+
+        <header class="topbar">
+          <div class="brand">
+            <button
+              type="button"
+              class="ghost icon-only"
+              id="toggle-sidebar"
+              aria-label="Menu"
+            >
+              ☰
+            </button>
+            <span class="mascot" aria-hidden="true"
+              ><span class="mascot-face"></span
+            ></span>
+            <div>
+              <h1>LIVAI</h1>
+              <p>
+                Bạn đồng hành local · <span id="model-label">llama3.2</span>
+              </p>
+            </div>
           </div>
-          <h2>Chào bạn, mình là LIVAI</h2>
-          <p>
-            Hỏi gì cũng được — mình chạy ngay trên máy bạn, ấm áp và riêng tư.
-          </p>
-        </section>
-        <div
-          class="thread"
-          id="thread"
-          role="log"
-          aria-live="polite"
-          hidden
-        ></div>
-      </main>
+          <button type="button" class="ghost" id="new-chat" hidden>
+            Bắt đầu lại
+          </button>
+        </header>
 
-      <footer class="composer-wrap">
-        <p class="error" id="error" hidden></p>
-        <div class="composer">
-          <textarea
-            id="input"
-            rows="1"
-            placeholder="Kể mình nghe đi…"
-            aria-label="Tin nhắn"
-          ></textarea>
-          <button type="button" class="send" id="send" disabled>Gửi</button>
-        </div>
-        <p class="hint">Enter gửi · Shift+Enter xuống dòng</p>
-      </footer>
+        <main class="stage">
+          <section class="welcome" id="welcome">
+            <div class="welcome-mascot" aria-hidden="true">
+              <span class="mascot big"><span class="mascot-face"></span></span>
+            </div>
+            <h2>Chào bạn, mình là LIVAI</h2>
+            <p>
+              Hỏi gì cũng được — mình chạy ngay trên máy bạn, ấm áp và riêng tư.
+            </p>
+          </section>
+          <div
+            class="thread"
+            id="thread"
+            role="log"
+            aria-live="polite"
+            hidden
+          ></div>
+        </main>
+
+        <footer class="composer-wrap">
+          <p class="error" id="error" hidden></p>
+          <div class="composer">
+            <textarea
+              id="input"
+              rows="1"
+              placeholder="Kể mình nghe đi…"
+              aria-label="Tin nhắn"
+            ></textarea>
+            <button type="button" class="send" id="send" disabled>Gửi</button>
+          </div>
+          <p class="hint">Enter gửi · Shift+Enter xuống dòng</p>
+        </footer>
+      </div>
     </div>
     <script src="/app.js"></script>
   </body>
