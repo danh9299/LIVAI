@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>LIVAI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <div class="blob blob-a" aria-hidden="true"></div>
+      <div class="blob blob-b" aria-hidden="true"></div>
+      <div class="blob blob-c" aria-hidden="true"></div>
+
+      <header class="topbar">
+        <div class="brand">
+          <span class="mascot" aria-hidden="true">
+            <span class="mascot-face"></span>
+          </span>
+          <div>
+            <h1>LIVAI</h1>
+            <p>Bạn đồng hành local · <span id="model-label">llama3.2</span></p>
+          </div>
+        </div>
+        <button type="button" class="ghost" id="new-chat" hidden>
+          Bắt đầu lại
+        </button>
+      </header>
+
+      <main class="stage">
+        <section class="welcome" id="welcome">
+          <div class="welcome-mascot" aria-hidden="true">
+            <span class="mascot big">
+              <span class="mascot-face"></span>
+            </span>
+          </div>
+          <h2>Chào bạn, mình là LIVAI</h2>
+          <p>
+            Hỏi gì cũng được — mình chạy ngay trên máy bạn, ấm áp và riêng tư.
+          </p>
+        </section>
+        <div
+          class="thread"
+          id="thread"
+          role="log"
+          aria-live="polite"
+          hidden
+        ></div>
+      </main>
+
+      <footer class="composer-wrap">
+        <p class="error" id="error" hidden></p>
+        <div class="composer">
+          <textarea
+            id="input"
+            rows="1"
+            placeholder="Kể mình nghe đi…"
+            aria-label="Tin nhắn"
+          ></textarea>
+          <button type="button" class="send" id="send" disabled>Gửi</button>
+        </div>
+        <p class="hint">Enter gửi · Shift+Enter xuống dòng</p>
+      </footer>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>
