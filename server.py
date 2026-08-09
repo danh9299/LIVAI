@@ -17,7 +17,6 @@ OLLAMA_HOST = "127.0.0.1"
 OLLAMA_PORT = 11434
 PORT = 5173
 
-# --- INIT DB ---
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -38,27 +37,29 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[{self.log_date_time_string()}] {fmt % args}")
 
     def do_GET(self) -> None:
-        # 1. API lấy danh sách chat
-        if self.path.startswith("/api/chats"):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/chats"):
             self.handle_get_chats()
             return
-        if self.path.startswith("/api/"):
+        if parsed.path.startswith("/api/"):
             self.proxy()
             return
         self.serve_static()
 
     def do_POST(self) -> None:
-        if self.path.startswith("/api/chats"):
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/chats"):
             self.handle_save_chats()
             return
-        if self.path.startswith("/api/"):
+        if parsed.path.startswith("/api/"):
             self.proxy()
             return
         self.send_error(405, "Method Not Allowed")
 
     def do_DELETE(self) -> None:
-        if self.path.startswith("/api/chats/"):
-            chat_id = self.path.split("/")[-1]
+        parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/chats/"):
+            chat_id = parsed.path.split("/")[-1]
             conn = sqlite3.connect(DB_PATH)
             conn.execute("DELETE FROM chats WHERE id=?", (chat_id,))
             conn.commit()
@@ -74,14 +75,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
-    # --- CHATS DB HANDLERS ---
     def handle_get_chats(self):
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute("SELECT data FROM chats ORDER BY updatedAt DESC")
         rows = cur.fetchall()
         conn.close()
-        chats = [json.loads(r[0]) for r in rows]
+        chats = []
+        for r in rows:
+            try:
+                chats.append(json.loads(r[0]))
+            except:
+                continue
         self.send_json(chats)
 
     def handle_save_chats(self):
@@ -98,6 +103,7 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
             self.send_json({"ok": True})
         except Exception as e:
+            print(f"DB Error: {e}")
             self.send_json({"error": str(e)}, status=400)
 
     def send_json(self, obj, status=200):
@@ -161,8 +167,8 @@ def main() -> None:
     if not ROOT.is_dir(): raise SystemExit(f"Missing UI folder: {ROOT}")
     with ReusableServer(("127.0.0.1", PORT), Handler) as httpd:
         print(f"LIVAI chat → http://127.0.0.1:{PORT}")
-        print(f"DB lưu tại: {DB_PATH}")
-        print("Ctrl+C để dừng")
+        print(f"DB luu tai: {DB_PATH}")
+        print("Ctrl+C de dung")
         httpd.serve_forever()
 
 if __name__ == "__main__":

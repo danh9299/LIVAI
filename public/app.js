@@ -105,13 +105,43 @@ function setStreaming(on) {
     els.input.focus();
   }
 }
-function openSidebar() {
-  els.sidebar?.classList.add("open");
-  els.overlay?.classList.add("open");
+function isMobileSidebar() {
+  return window.matchMedia("(max-width: 900px)").matches;
 }
-function closeSidebar() {
-  els.sidebar?.classList.remove("open");
+
+function openSidebar() {
+  if (!els.sidebar) return;
+  els.sidebar.classList.add("open");
+  els.sidebar.classList.remove("collapsed");
+  if (isMobileSidebar()) els.overlay?.classList.add("open");
+  else els.overlay?.classList.remove("open");
+  localStorage.setItem("livai_sidebar", "open");
+}
+
+function closeSidebar({ persist = true } = {}) {
+  if (!els.sidebar) return;
+  els.sidebar.classList.remove("open");
   els.overlay?.classList.remove("open");
+  if (!isMobileSidebar()) els.sidebar.classList.add("collapsed");
+  else els.sidebar.classList.remove("collapsed");
+  if (persist) localStorage.setItem("livai_sidebar", "closed");
+}
+
+function toggleSidebar() {
+  if (isMobileSidebar()) {
+    els.sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    return;
+  }
+  els.sidebar.classList.contains("collapsed") ? openSidebar() : closeSidebar();
+}
+
+function restoreSidebar() {
+  if (isMobileSidebar()) {
+    closeSidebar({ persist: false });
+    return;
+  }
+  if (localStorage.getItem("livai_sidebar") === "closed") closeSidebar();
+  else openSidebar();
 }
 
 function renderChatList() {
@@ -135,7 +165,7 @@ function renderChatList() {
         localStorage.setItem("livai_current_id", chat.id);
         renderChatList();
         renderThread();
-        closeSidebar();
+        if (isMobileSidebar()) closeSidebar();
       };
       div.querySelector(".del").onclick = async (e) => {
         e.stopPropagation();
@@ -183,7 +213,30 @@ async function createNewChat() {
   await saveChatToDB(chat);
   renderChatList();
   renderThread();
-  closeSidebar();
+  if (isMobileSidebar()) closeSidebar();
+}
+
+function thinkingMarkup() {
+  const wrap = document.createElement("span");
+  wrap.className = "thinking-row";
+  wrap.setAttribute("aria-label", "LIVAI đang nghĩ");
+  wrap.innerHTML = `
+    <span class="thinking-pulse" aria-hidden="true"></span>
+    <span class="thinking-label">Đang nghĩ</span>
+    <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+  `;
+  return wrap;
+}
+
+function typingTrailMarkup(waiting) {
+  const trail = document.createElement("span");
+  trail.className = waiting ? "typing-trail is-paused" : "typing-trail";
+  trail.setAttribute("aria-hidden", "true");
+  trail.innerHTML = `
+    <span class="caret"></span>
+    <span class="typing-dots"><i></i><i></i><i></i></span>
+  `;
+  return trail;
 }
 
 function appendBubble(role, content, id) {
@@ -198,22 +251,145 @@ function appendBubble(role, content, id) {
   if (content) {
     body.textContent = content;
   } else if (role === "assistant") {
-    const cursor = document.createElement("span");
-    cursor.className = "cursor";
-    body.appendChild(cursor);
+    body.classList.add("is-thinking");
+    body.appendChild(thinkingMarkup());
   }
   article.append(label, body);
   els.thread.appendChild(article);
   article.scrollIntoView({ behavior: "smooth", block: "end" });
   return body;
 }
-function updateBubble(id, content) {
+
+function updateBubble(id, content, { waiting = false } = {}) {
   const article = els.thread.querySelector(`[data-id="${id}"]`);
   if (!article) return;
   const body = article.querySelector(".body");
   if (!body) return;
-  body.textContent = content;
-  article.scrollIntoView({ behavior: "smooth", block: "end" });
+
+  if (body.classList.contains("is-thinking")) {
+    body.classList.remove("is-thinking");
+  }
+  body.classList.add("is-composing");
+  body.classList.toggle("is-waiting", waiting);
+
+  body.replaceChildren();
+  if (content) body.append(document.createTextNode(content));
+  body.appendChild(typingTrailMarkup(waiting));
+  article.scrollIntoView({ block: "nearest" });
+}
+
+function finishBubble(id) {
+  const article = els.thread.querySelector(`[data-id="${id}"]`);
+  if (!article) return;
+  const body = article.querySelector(".body");
+  if (!body) return;
+  body.classList.remove("is-thinking", "is-composing", "is-waiting");
+  body.querySelector(".typing-trail")?.remove();
+}
+
+/** Smooth on-screen typing so pauses between Ollama chunks still feel alive. */
+const typewriter = {
+  id: null,
+  shown: "",
+  pending: "",
+  networkDone: false,
+  timer: null,
+  onDone: null,
+};
+
+function clearTypewriter() {
+  if (typewriter.timer) {
+    clearTimeout(typewriter.timer);
+    typewriter.timer = null;
+  }
+  const done = typewriter.onDone;
+  typewriter.id = null;
+  typewriter.shown = "";
+  typewriter.pending = "";
+  typewriter.networkDone = false;
+  typewriter.onDone = null;
+  done?.();
+}
+
+function startTypewriter(id) {
+  clearTypewriter();
+  typewriter.id = id;
+}
+
+function enqueueTypewriter(chunk) {
+  if (!typewriter.id || !chunk) return;
+  typewriter.pending += chunk;
+  if (!typewriter.timer) pumpTypewriter();
+}
+
+function endTypewriterNetwork() {
+  typewriter.networkDone = true;
+  return new Promise((resolve) => {
+    typewriter.onDone = resolve;
+    if (!typewriter.id) {
+      typewriter.onDone = null;
+      resolve();
+      return;
+    }
+    if (!typewriter.timer) pumpTypewriter();
+  });
+}
+
+function pumpTypewriter() {
+  const id = typewriter.id;
+  if (!id) return;
+
+  if (typewriter.pending.length > 0) {
+    // Catch up faster when backlog is large; still animate char-by-char feel
+    const backlog = typewriter.pending.length;
+    const take = backlog > 80 ? 10 : backlog > 30 ? 5 : backlog > 8 ? 2 : 1;
+    const slice = typewriter.pending.slice(0, take);
+    typewriter.pending = typewriter.pending.slice(take);
+    typewriter.shown += slice;
+    updateBubble(id, typewriter.shown, { waiting: false });
+    const delay = backlog > 80 ? 12 : backlog > 30 ? 16 : backlog > 8 ? 22 : 28;
+    typewriter.timer = setTimeout(pumpTypewriter, delay);
+    return;
+  }
+
+  if (!typewriter.networkDone) {
+    // Stream still open, waiting for next tokens — keep typing indicator alive
+    updateBubble(id, typewriter.shown, { waiting: true });
+    typewriter.timer = null;
+    return;
+  }
+
+  updateBubble(id, typewriter.shown, { waiting: false });
+  finishBubble(id);
+  typewriter.timer = null;
+  typewriter.id = null;
+  const done = typewriter.onDone;
+  typewriter.onDone = null;
+  done?.();
+}
+
+function flushTypewriterNow() {
+  if (!typewriter.id) {
+    const done = typewriter.onDone;
+    typewriter.onDone = null;
+    done?.();
+    return;
+  }
+  if (typewriter.pending) {
+    typewriter.shown += typewriter.pending;
+    typewriter.pending = "";
+  }
+  if (typewriter.timer) {
+    clearTimeout(typewriter.timer);
+    typewriter.timer = null;
+  }
+  updateBubble(typewriter.id, typewriter.shown, { waiting: false });
+  finishBubble(typewriter.id);
+  typewriter.id = null;
+  typewriter.networkDone = true;
+  const done = typewriter.onDone;
+  typewriter.onDone = null;
+  done?.();
 }
 
 async function sendMessage() {
@@ -239,6 +415,7 @@ async function sendMessage() {
   const assistantMsg = { role: "assistant", content: "" };
   chat.messages.push(assistantMsg);
   appendBubble("assistant", "", assistantId);
+  startTypewriter(assistantId);
   setStreaming(true);
   abortController = new AbortController();
 
@@ -283,25 +460,32 @@ async function sendMessage() {
         if (!chunk) continue;
         full += chunk;
         chat.messages[chat.messages.length - 1].content = full;
-        updateBubble(assistantId, full);
+        enqueueTypewriter(chunk);
       }
     }
+    await endTypewriterNetwork();
     await saveChatToDB(chat);
     renderChatList();
   } catch (e) {
     if (e?.name === "AbortError") {
       if (!chat.messages[chat.messages.length - 1]?.content) {
         chat.messages.pop();
+        clearTypewriter();
         const node = els.thread.querySelector(`[data-id="${assistantId}"]`);
         node?.remove();
+      } else {
+        flushTypewriterNow();
       }
     } else {
       const msg = e instanceof Error ? e.message : "Không kết nối được Ollama.";
       showError(msg);
       if (!chat.messages[chat.messages.length - 1]?.content) {
         chat.messages.pop();
+        clearTypewriter();
         const node = els.thread.querySelector(`[data-id="${assistantId}"]`);
         node?.remove();
+      } else {
+        flushTypewriterNow();
       }
     }
   } finally {
@@ -331,13 +515,20 @@ els.send.addEventListener("click", () => {
 els.newChat.addEventListener("click", () => createNewChat());
 els.createBtn?.addEventListener("click", () => createNewChat());
 els.search?.addEventListener("input", renderChatList);
-els.toggleSidebar?.addEventListener("click", () =>
-  els.sidebar.classList.contains("open") ? closeSidebar() : openSidebar(),
-);
-els.overlay?.addEventListener("click", closeSidebar);
+els.toggleSidebar?.addEventListener("click", toggleSidebar);
+els.overlay?.addEventListener("click", () => closeSidebar());
+window.addEventListener("resize", () => {
+  // Keep desktop/mobile modes consistent when crossing breakpoint
+  if (isMobileSidebar()) {
+    if (!els.sidebar.classList.contains("open")) closeSidebar({ persist: false });
+  } else {
+    restoreSidebar();
+  }
+});
 
 // INIT
 (async () => {
+  restoreSidebar();
   await loadChatsFromDB();
   currentChatId = localStorage.getItem("livai_current_id");
   if (chats.length === 0) {
