@@ -14,6 +14,10 @@ const els = {
   sidebar: document.getElementById("sidebar"),
   overlay: document.getElementById("overlay"),
   toggleSidebar: document.getElementById("toggle-sidebar"),
+  authGate: document.getElementById("auth-gate"),
+  authForm: document.getElementById("auth-form"),
+  authPassword: document.getElementById("auth-password"),
+  authError: document.getElementById("auth-error"),
 };
 
 els.modelLabel.textContent = MODEL;
@@ -22,15 +26,86 @@ let chats = [];
 let currentChatId = null;
 let streaming = false;
 let abortController = null;
+let authRequired = false;
 
 function uid() {
   return crypto.randomUUID();
 }
 
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+  });
+  if (res.status === 401 && authRequired) {
+    showAuthGate("Phiên hết hạn — nhập lại mật khẩu.");
+  }
+  return res;
+}
+
+function showAuthGate(message = "") {
+  if (!els.authGate) return;
+  els.authGate.hidden = false;
+  if (els.authError) {
+    if (message) {
+      els.authError.hidden = false;
+      els.authError.textContent = message;
+    } else {
+      els.authError.hidden = true;
+      els.authError.textContent = "";
+    }
+  }
+  els.authPassword?.focus();
+}
+
+function hideAuthGate() {
+  if (!els.authGate) return;
+  els.authGate.hidden = true;
+  if (els.authError) {
+    els.authError.hidden = true;
+    els.authError.textContent = "";
+  }
+  if (els.authPassword) els.authPassword.value = "";
+}
+
+async function ensureAuth() {
+  try {
+    const res = await apiFetch("/api/auth/status");
+    const data = await res.json();
+    authRequired = !!data.authRequired;
+    if (!authRequired || data.ok) {
+      hideAuthGate();
+      return true;
+    }
+    showAuthGate();
+    return false;
+  } catch {
+    // offline / old server without auth routes
+    authRequired = false;
+    hideAuthGate();
+    return true;
+  }
+}
+
+async function login(password) {
+  const res = await apiFetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error === "wrong password" ? "Sai mật khẩu." : "Đăng nhập thất bại.");
+  }
+  hideAuthGate();
+  return true;
+}
+
 // --- DB API ---
 async function loadChatsFromDB() {
   try {
-    const res = await fetch("/api/chats");
+    const res = await apiFetch("/api/chats");
+    if (res.status === 401) return;
     if (!res.ok) throw new Error("no api");
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
@@ -56,7 +131,7 @@ async function saveChatToDB(chat) {
   localStorage.setItem("livai_chats", JSON.stringify(chats));
   if (chat.id) localStorage.setItem("livai_current_id", chat.id);
   try {
-    await fetch("/api/chats", {
+    await apiFetch("/api/chats", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(chat),
@@ -70,7 +145,7 @@ async function deleteChatFromDB(id) {
   chats = chats.filter((x) => x.id !== id);
   localStorage.setItem("livai_chats", JSON.stringify(chats));
   try {
-    await fetch(`/api/chats/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/chats/${id}`, { method: "DELETE" });
   } catch {}
 }
 
@@ -420,7 +495,7 @@ async function sendMessage() {
   abortController = new AbortController();
 
   try {
-    const res = await fetch("/api/chat", {
+    const res = await apiFetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -431,6 +506,9 @@ async function sendMessage() {
       signal: abortController.signal,
     });
 
+    if (res.status === 401) {
+      throw new Error("Chưa đăng nhập.");
+    }
     if (!res.ok || !res.body) {
       throw new Error(`Ollama lỗi ${res.status}`);
     }
@@ -526,9 +604,18 @@ window.addEventListener("resize", () => {
   }
 });
 
-// INIT
-(async () => {
-  restoreSidebar();
+els.authForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const password = els.authPassword?.value || "";
+  try {
+    await login(password);
+    await bootApp();
+  } catch (err) {
+    showAuthGate(err instanceof Error ? err.message : "Đăng nhập thất bại.");
+  }
+});
+
+async function bootApp() {
   await loadChatsFromDB();
   currentChatId = localStorage.getItem("livai_current_id");
   if (chats.length === 0) {
@@ -541,4 +628,12 @@ window.addEventListener("resize", () => {
   }
   resizeInput();
   els.input.focus();
+}
+
+// INIT
+(async () => {
+  restoreSidebar();
+  const ok = await ensureAuth();
+  if (!ok) return;
+  await bootApp();
 })();

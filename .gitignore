@@ -1,0 +1,32 @@
+# Local chat database (private)
+livai.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets / local config
+.env
+.env.*
+.livai_password
+.livai_secret
+
+# Cloudflare installer / tunnel leftovers
+cloudflared.deb
+*.deb
+*.rpm
+cloudflared
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

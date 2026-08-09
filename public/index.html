@@ -71,7 +71,6 @@
             class="thread"
             id="thread"
             role="log"
-            cho
             aria-live="polite"
             hidden
           ></div>
@@ -92,6 +91,26 @@
         </footer>
       </div>
     </div>
+
+    <div class="auth-gate" id="auth-gate" hidden>
+      <form class="auth-card" id="auth-form">
+        <span class="mascot" aria-hidden="true"
+          ><span class="mascot-face"></span
+        ></span>
+        <h2>LIVAI khóa rồi</h2>
+        <p>Nhập mật khẩu để xem chat và dùng AI.</p>
+        <input
+          type="password"
+          id="auth-password"
+          placeholder="Mật khẩu"
+          autocomplete="current-password"
+          required
+        />
+        <p class="auth-error" id="auth-error" hidden></p>
+        <button type="submit" class="send" id="auth-submit">Vào</button>
+      </form>
+    </div>
+
     <script src="/app.js"></script>
   </body>
 </html>
